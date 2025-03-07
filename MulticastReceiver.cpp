@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <cstring>
 
 #ifdef _WIN32
@@ -14,7 +15,7 @@
 
 #define MULTICAST_GROUP "239.255.0.1"
 #define PORT 12345
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 int main() {
 #ifdef _WIN32
@@ -71,8 +72,11 @@ int main() {
         return 1;
     }
 
-    std::cout << "Listening for multicast messages on " << MULTICAST_GROUP << ":" << PORT << std::endl;
+    std::cout << "Listening for multicast video segments on " 
+              << MULTICAST_GROUP << ":" << PORT << std::endl;
 
+    std::ofstream outputFile("received.ts", std::ios::binary | std::ios::app);
+    
     // メッセージ受信ループ
     while (true) {
         socklen_t senderAddrLen = sizeof(senderAddr);
@@ -85,12 +89,11 @@ int main() {
             break;
         }
 
-        buffer[recvLen] = '\0';
-        std::cout << "Received: " << buffer << " from "
-                  << inet_ntoa(senderAddr.sin_addr) << std::endl;
+        outputFile.write(buffer, recvLen);
     }
 
-    // クリーンアップ処理
+    outputFile.close();
+
 #ifdef _WIN32
     closesocket(sock);
     WSACleanup();

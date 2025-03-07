@@ -1,5 +1,7 @@
 #include <iostream>
+#include <fstream>
 #include <cstring>
+#include <vector>
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -12,6 +14,34 @@
 
 #define MULTICAST_GROUP "239.255.0.1"
 #define PORT 12345
+#define BUFFER_SIZE 4096
+
+std::vector<std::string> segments = { "segment0.ts", "segment1.ts", "segment2.ts", 
+                                      "segment3.ts", "segment4.ts", "segment5.ts", 
+                                      "segment6.ts", "segment7.ts" };
+
+void sendFile(const std::string& filename, int sock, sockaddr_in& addr) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open: " << filename << std::endl;
+        return;
+    }
+
+    char buffer[BUFFER_SIZE];
+
+    while (!file.eof()) {
+        file.read(buffer, BUFFER_SIZE);
+        int bytesRead = file.gcount();
+
+        if (sendto(sock, buffer, bytesRead, 0, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("sendto failed");
+            break;
+        }
+    }
+
+    file.close();
+    std::cout << "Sent: " << filename << std::endl;
+}
 
 int main() {
 #ifdef _WIN32
@@ -22,36 +52,29 @@ int main() {
     }
 #endif
 
-    int sock;
-    sockaddr_in multicastAddr;
-    char message[] = "Hello, Multicast!";
-
-    // ソケット作成
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         perror("socket creation failed");
         return 1;
     }
 
-    // マルチキャストアドレスの設定
-    memset(&multicastAddr, 0, sizeof(multicastAddr));
+    sockaddr_in multicastAddr{};
     multicastAddr.sin_family = AF_INET;
     multicastAddr.sin_addr.s_addr = inet_addr(MULTICAST_GROUP);
     multicastAddr.sin_port = htons(PORT);
 
-    // データをマルチキャストグループに送信
-    for (int i = 0; i < 5; i++) {
-        if (sendto(sock, message, strlen(message), 0, 
-                   (struct sockaddr*)&multicastAddr, sizeof(multicastAddr)) < 0) {
-            perror("sendto failed");
-            break;
-        }
-        std::cout << "Sent: " << message << std::endl;
+    std::cout << "Starting multicast streaming on " << MULTICAST_GROUP << ":" << PORT << std::endl;
+
+    while (true) {
+        for (const auto& segment : segments) {
+            sendFile(segment, sock, multicastAddr);
+
 #ifdef _WIN32
-        Sleep(2000); // Windows の場合
+            Sleep(6000);  // 6秒待機 (Windows)
 #else
-        sleep(2); // Linux の場合
+            sleep(6);  // 6秒待機 (Linux)
 #endif
+        }
     }
 
 #ifdef _WIN32
